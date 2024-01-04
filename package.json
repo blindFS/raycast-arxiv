@@ -6,7 +6,8 @@
   "icon": "arxiv-icon.png",
   "author": "koayon",
   "contributors": [
-    "pernielsentikaer"
+    "pernielsentikaer",
+    "blindfs"
   ],
   "categories": [
     "Productivity",
@@ -22,13 +23,24 @@
       "mode": "view"
     }
   ],
+  "preferences": [
+    {
+      "description": "Where to download PDF files",
+      "name": "PDFDownloadPath",
+      "required": true,
+      "title": "PDF download folder",
+      "type": "textfield"
+    }
+  ],
   "dependencies": {
     "@raycast/api": "^1.52.1",
     "@raycast/utils": "^1.4.8",
     "date-fns": "^2.23.0",
     "natural": "^6.3.0",
     "npm": "^9.6.7",
-    "xml2js": "^0.5.0"
+    "xml2js": "^0.5.0",
+    "stopword": "^3.0.1",
+    "node-fetch": "3.3.2"
   },
   "devDependencies": {
     "@raycast/eslint-config": "1.0.5",

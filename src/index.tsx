@@ -1,14 +1,22 @@
-import { ActionPanel, Action, List, Icon, Color } from "@raycast/api";
+import { ActionPanel, Action, List, Icon, Color, Clipboard } from "@raycast/api";
 import { useFetch } from "@raycast/utils";
 import { useState } from "react";
 import { URLSearchParams } from "node:url";
 import { formatDistanceToNow } from "date-fns";
+import { getPreferenceValues, environment } from "@raycast/api";
+import { Toast, showToast } from "@raycast/api";
 import { DiceCoefficient } from "natural/lib/natural/distance/index";
 import { SearchResult, ArxivCategory, ArxivCategoryColour, SearchListItemProps } from "./types";
 import { parseResponse } from "./utils";
+import { removeStopwords } from "stopword";
+import { resolve } from "path";
+import fs from "fs";
+import fetch from "node-fetch";
 
 const DEFAULT_TEXT = "";
 const MAX_RESULTS = 30;
+let { PDFDownloadPath } = getPreferenceValues();
+PDFDownloadPath = PDFDownloadPath || environment.supportPath;
 
 export default function Command() {
   const [searchText, setSearchText] = useState("");
@@ -61,15 +69,42 @@ export default function Command() {
   );
 }
 
+async function downloadPDFToFile(pdfUrl: string, fileName: string): Promise<string> {
+  await showToast({
+    style: Toast.Style.Animated,
+    title: `PDF file downloading to ${fileName}`,
+  });
+  const response = await fetch(pdfUrl);
+  const buffer = await response.arrayBuffer();
+  fs.writeFileSync(fileName, Buffer.from(buffer));
+  await showToast({
+    style: Toast.Style.Success,
+    title: `Download succeeded.`,
+  });
+  return fileName;
+}
+
 function SearchListItem({ id, published, title, authors, category, first_category, pdf_link }: SearchListItemProps) {
   const date = new Date(published);
   const timeAgo = formatDistanceToNow(date, { addSuffix: true });
   const accessories = [{ tag: timeAgo }];
 
+  const shortID = `${authors ? authors[0][0].split(" ").pop() : "unk"}${date.getFullYear()}${
+    title ? removeStopwords(title.replace(/[^a-zA-Z]/, "").split(" "))[0] : "unk"
+  }`.toLowerCase();
   const authorsString = authors ? authors.join(", ") : "";
   const multipleAuthors = authorsString.split(",").length > 1;
   const addToAuthor = multipleAuthors ? " et al." : "";
   const primaryAuthor = authorsString.split(",")[0] + addToAuthor;
+
+  const bibtex = `@article{${shortID},
+  author = {${primaryAuthor}},
+  title = {${title}},
+  year = {${date.getFullYear()}},
+  archivePrefix ={arXiv},
+  url = {${id}},
+  primaryClass = {${category}},
+}`;
 
   const categoryColour = ArxivCategoryColour[
     first_category as keyof typeof ArxivCategoryColour
@@ -83,8 +118,23 @@ function SearchListItem({ id, published, title, authors, category, first_categor
       subtitle={primaryAuthor}
       actions={
         <ActionPanel>
-          <Action.OpenInBrowser title="Open PDF" url={pdf_link} icon={{ source: Icon.Link }} />
-          <Action.CopyToClipboard title="Copy Link" content={pdf_link} icon={{ source: Icon.Redo }} />
+          <Action.OpenInBrowser title="Open Link" url={id} icon={{ source: Icon.Link }} />
+          <Action.OpenInBrowser title="Open PDF" url={pdf_link} icon={{ source: Icon.Document }} />
+          <Action.CopyToClipboard
+            title="Copy BibTex"
+            content={bibtex}
+            icon={{ source: Icon.CopyClipboard }}
+            shortcut={{ modifiers: ["cmd"], key: "c" }}
+          />
+          <Action
+            title="Download PDF"
+            icon={{ source: Icon.Download }}
+            onAction={async () => {
+              Clipboard.copy(bibtex);
+              await downloadPDFToFile(pdf_link, resolve(PDFDownloadPath, shortID + ".pdf"));
+            }}
+            shortcut={{ modifiers: ["cmd"], key: "d" }}
+          />
         </ActionPanel>
       }
       accessories={accessories}
@@ -107,9 +157,9 @@ function compareSearchResults(textToCompare: string) {
     const bTitle = b.title ? b.title[0] : "";
 
     const aTitleSimilarity = DiceCoefficient(aTitle, textToCompare);
-    const bTitleSimiarlity = DiceCoefficient(bTitle, textToCompare);
+    const bTitleSimilarity = DiceCoefficient(bTitle, textToCompare);
 
-    return bTitleSimiarlity - aTitleSimilarity;
+    return bTitleSimilarity - aTitleSimilarity;
   };
 }
 
